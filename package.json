@@ -1,0 +1,42 @@
+{
+  "name": "mapcampfun",
+  "version": "0.1.0",
+  "description": "Wohnmobil-Wochenendplaner (PWA)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "data:germany": "node scripts/build-germany.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ToMu44/mapcampfun.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ToMu44/mapcampfun/issues"
+  },
+  "homepage": "https://github.com/ToMu44/mapcampfun#readme",
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.4.0",
+    "@turf/circle": "^7.4.0",
+    "h3-js": "^4.5.0",
+    "idb-keyval": "^6.3.0",
+    "maplibre-gl": "^6.19.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/topojson-client": "^3.1.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "topojson-client": "^3.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "world-atlas": "^2.0.2"
+  },
+  "private": true,
+  "type": "module"
+}

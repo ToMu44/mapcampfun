@@ -1,0 +1,33 @@
+import { get, set } from 'idb-keyval';
+import type { LatLng } from './geo';
+
+export type Place = LatLng & { label: string; fullLabel?: string };
+
+export type Settings = {
+  home: Place | null;
+  radiusKm: number;
+  /** H3-Auflösung des Rasters (5 ≈ 17 km Zellen) */
+  hexResolution: number;
+};
+
+export const DEFAULT_SETTINGS: Settings = { home: null, radiusKm: 150, hexResolution: 5 };
+
+const KEY = 'settings-v1';
+
+/** Lesen ist fehlertolerant: ohne Speicher (z. B. privates Fenster) gelten die Standardwerte. */
+export async function loadSettings(): Promise<Settings> {
+  try {
+    const stored = await get<Partial<Settings>>(KEY);
+    return { ...DEFAULT_SETTINGS, ...stored };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export async function saveSettings(s: Settings): Promise<void> {
+  try {
+    await set(KEY, s);
+  } catch {
+    /* Speichern nicht möglich – App läuft trotzdem weiter */
+  }
+}
