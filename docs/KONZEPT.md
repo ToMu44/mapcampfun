@@ -1,18 +1,19 @@
-# Wohnmobil-Wochenendplaner – Konzeptpapier
+# Wohnmobil-Wochenendplaner (MapCampFun) – Konzeptpapier
 
-**Stand:** 22.11.2026 · **Status:** Konzept abgestimmt, Umsetzung noch nicht freigegeben
+**Stand:** 22.11.2026 · **Status:** Stufen 1–3 umgesetzt und online, Stufen 4–5 offen
+**App:** https://tomu44.github.io/mapcampfun/ · **Repository:** https://github.com/ToMu44/mapcampfun
 
 ---
 
 ## 1. Ziel
 
-Eine Web-App für **iPad Air und MacBook Pro**, die für einen frei wählbaren Zeitraum (Standard: kommendes Wochenende) zeigt,
+Eine Web-App für **iPad Air und MacBook Pro**. Für einen frei wählbaren Zeitraum (Standard: kommendes Wochenende) zeigt sie:
 
-1. **wo** im Umkreis des Wohnorts das Wetter für Camping bzw. für gewählte Freizeitaktivitäten gut ist (farbige Karte),
-2. **welche Übernachtungsplätze** für Wohnmobile es in einem gewählten Gebiet gibt (Symbole + Detail-Popup),
-3. **welche Aktivität / Tour** dort empfehlenswert ist,
+1. **wo** im Umkreis des Wohnorts das Wetter für Camping bzw. die gewählten Freizeitaktivitäten gut ist (farbige Karte),
+2. **welche Übernachtungsplätze** für Wohnmobile es in einem gewählten Gebiet gibt (Symbole und Details),
+3. **welche Aktivität und Tour** dort empfehlenswert ist.
 
-und ausgewählte Plätze auf einer **Merkliste** mit aktuellem Wetter vergleicht.
+Ausgewählte Plätze kommen auf eine **Merkliste** und werden dort mit aktuellem Wetter verglichen.
 
 ## 2. Rahmenbedingungen
 
@@ -21,219 +22,259 @@ und ausgewählte Plätze auf einer **Merkliste** mit aktuellem Wetter vergleicht
 | Plattform | Progressive Web App (PWA) in Safari, auf iPad und Mac zum Home-Bildschirm bzw. Dock hinzufügbar |
 | Nutzer | Einzelnutzer, kein Login, kein Backend |
 | Gebiet | nur **Deutschland**; Suchradius wird an der Landesgrenze abgeschnitten |
-| Kosten | **0 €** – ausschließlich kostenlose Dienste ohne API-Key |
-| Hosting | **GitHub Pages**, öffentliches Repository, **2FA** auf dem GitHub-Account |
-| Datenhaltung | nur lokal im Browser (IndexedDB); Abgleich iPad ↔ Mac manuell per JSON-Export/-Import |
-| Sprache | Deutsch |
+| Kosten | **0 €**, nur kostenlose Dienste ohne API-Key |
+| Hosting | **GitHub Pages** (öffentliches Repository, 2FA), Deployment per GitHub Actions bei jedem Push auf `main` |
+| Datenhaltung | nur lokal im Browser (IndexedDB); Abgleich iPad ↔ Mac per JSON-Export/-Import (Stufe 5) |
+| Sprache | Deutsch (auch die Kartenbeschriftung) |
 | Bewusst nicht enthalten | Google-Bewertungen, Fahrtzeitberechnung, Sync, Offline-Karten, KI-Texte |
 
 ## 3. Datenquellen
 
-| Zweck | Dienst | Hinweise |
+| Zweck | Dienst | Hinweise aus der Umsetzung |
 |---|---|---|
-| Kartenhintergrund | OpenFreeMap (Vektorkacheln, ohne Key) bzw. OSM-Kacheln | Quellenangabe „© OpenStreetMap-Mitwirkende“ Pflicht |
-| Plätze, Touren, Loipen, Städte | OpenStreetMap über **Overpass API** | Fair-Use-Grenzen → Ergebnisse cachen |
-| Wetter (bis 16 Tage) | **Open-Meteo** Forecast API | mehrere Koordinaten pro Abfrage möglich |
-| Klimawerte (> 16 Tage) | Open-Meteo Historical API (Mittel der Vorjahre) | klar als „Klimatologie, keine Prognose“ gekennzeichnet |
-| Adresssuche | **Nominatim** | max. 1 Abfrage/s, Eingabe entprellt |
-| Landesgrenze | vereinfachtes GeoJSON von Deutschland, in der App mitgeliefert | – |
-| Externe Portale | Links zu park4night, Landvergnügen, Alpaca Camping, Komoot, Outdooractive | nur Verlinkung, keine Einbindung (keine offenen APIs) |
-| Route / Fahrtzeit | Link „Route in Apple Karten öffnen“ (`maps.apple.com/?daddr=lat,lon`) | Fahrtzeit zeigt Apple Karten, nicht die App |
+| Kartenhintergrund | **OpenFreeMap** (Stil „liberty“, ohne Key) | Ortsnamen werden auf `name:de` umgestellt; Straßennummern bleiben unverändert |
+| Plätze, Touren, Loipen, Städte | OpenStreetMap über **Overpass API** | Hauptserver `overpass-api.de` ist oft ausgelastet; als Ersatz dient der Spiegel `overpass.private.coffee`. Ergebnisse werden je Sitzung zwischengespeichert. |
+| Wetter (bis 16 Tage) | **Open-Meteo** Forecast API | Limit ca. **600 Orte pro Minute** und 10 000 pro Tag (ein Gebiet = ein Ort). Bei 150 km Radius sind das rund 300 pro Abfrage. |
+| Klimawerte (> 16 Tage) | Open-Meteo Archive API | Mittel der letzten 3 Jahre auf gröberem Raster, gekennzeichnet als „Klimamittel, keine Prognose“ |
+| Adresssuche, Ortsname des Standorts | **Nominatim** | nur auf ausdrückliche Suche (max. 1 Anfrage/s) |
+| Landesgrenze | Natural Earth 1:50m (über `world-atlas`), in der App mitgeliefert | Bodensee gehört nicht zum Polygon. Gebiete am Ufer können daher fehlen. |
+| Externe Portale | park4night, Landvergnügen, Alpaca Camping, Komoot, Outdooractive | nur Startseiten verlinkt; ob die Regionssuche per URL geht, ist nicht geprüft |
+| Route / Fahrtzeit | Link „Route in Apple Karten öffnen“ | Apple Karten zeigt die Fahrtzeit |
 
-**Bekannte Grenze:** Vollständigkeit ist nicht erreichbar. Kosten, Buchung, Ausstattung und Öffnungszeiten fehlen in OSM bei einem großen Teil der Plätze. Fehlende Felder werden als **„keine Angabe“** angezeigt, nie ausgeblendet. Ein Platz mit unbekanntem Öffnungsstatus bleibt sichtbar und wird als „Öffnung unbekannt“ markiert.
+**Grenze der Vollständigkeit:**
+- Kosten, Buchung, Ausstattung und Öffnungszeiten fehlen in OSM oft. Sie erscheinen dann als „keine Angabe“ bzw. „Öffnung unbekannt“ und werden nie ausgeblendet.
+- Die Datenqualität hängt von der OSM-Community ab. Fehler lassen sich direkt in OpenStreetMap korrigieren.
 
 ## 4. Bedienablauf
 
 ```
-Start → Karte (Mittelpunkt + Radius + Zeitraum + Aktivität)
-      → Hexagon-Raster wird nach Wetter gefärbt, Infofeld zeigt Vorschläge
-      → Klick auf Zelle → Plätze in der Zelle werden geladen (Symbole)
-      → Klick auf Symbol → Popup mit Details, Aktivität, Tour
-      → „Auf Merkliste“ → Merkliste (eigene Ansicht, Tabelle)
+Start → Standort ermitteln (erst danach wird geladen)
+      → Karte: Hexagon-Raster nach Wetter gefärbt, Infofeld mit Vorschlägen
+      → Gebiet antippen → Karte zoomt hinein, Plätze werden geladen (Symbole + Liste)
+      → Platz antippen → Details im Bedienfeld
+      → „Auf die Merkliste“ → Merkliste (eigene Ansicht, Stufe 4)
 ```
 
-### 4.1 Steuerung (Seitenleiste bzw. Bottom-Sheet)
+### 4.1 Bedienfeld (Reihenfolge von oben)
 
-- **Mittelpunkt:** Geolocation (Standard) · Adresseingabe · Button „Heimatadresse“
-- **Radius:** frei wählbar, Standard **150 km**
-- **Zeitraum:** Standard **kommendes Wochenende (Fr–So)**; frei wählbar. Ab Tag 17 werden Klimawerte statt einer Prognose verwendet, mit Hinweis.
-- **Aktivität:**
-  - keine Auswahl → Färbung nach „Camping-Wetter“
-  - Auswahl aus **Wandern, Radfahren, Ski-Langlauf, Städtebesuch**, höchstens 2 mit **Rang 1 / Rang 2**
-- **Tages-Schieberegler:** Gesamtansicht oder ein einzelner Tag des Zeitraums
-- **Legende:** Platztypen ein- und ausblendbar
+1. Hinweise (z. B. Abfragelimit, Dienst nicht erreichbar)
+2. **Gewähltes Gebiet** bzw. **Platzdetails** (mit „Zurück zum Gebiet“)
+3. **Mittelpunkt:** Mein Standort (Standard) · Adresssuche · Heimat; „Als Heimatadresse speichern“
+4. **Suchradius:** 25–400 km, Standard **150 km**
+5. **Zeitraum:**
+   - Standard ist das kommende Wochenende: Mo–Do → Fr–So dieser Woche; Fr/Sa → heute bis So; So → Fr–So der nächsten Woche.
+   - Höchstens **14 Tage** am Stück, Beginn frühestens heute.
+6. **Aktivität:** Rang 1 und Rang 2 per Auswahlliste; ohne Rang 1 gilt das Camping-Wetter.
+7. **Ansicht:** „Gesamt“ (bester Tag) oder ein einzelner Tag
+8. **Vorschläge** (nur ohne Aktivität)
+
+Die **Legende** liegt oben rechts auf der Karte. Während des Ladens erscheint oben mittig der Hinweis „Wetter wird geladen …“.
 
 ### 4.2 Layout
 
 | Gerät / Ausrichtung | Layout |
 |---|---|
-| Mac, iPad quer | Karte ca. 70 % links, Seitenleiste rechts (Filter, Infofeld, Details) |
-| iPad hoch | Karte im Vollbild, Filter und Details als hochziehbares Bottom-Sheet |
-| Merkliste | eigene Ansicht bzw. eigener Tab (volle Breite für die Tabelle) |
+| Mac, iPad quer | Karte links, Seitenleiste rechts (360 px) |
+| iPad hoch, schmale Fenster | Karte im Vollbild, Bedienfeld als einklappbares Bottom-Sheet. Beim Einpassen und Zoomen der Karte wird die Höhe des Sheets berücksichtigt, damit nichts verdeckt wird. |
+| Merkliste | eigene Ansicht (Stufe 4) |
 
-Alle Bedienelemente sind touch-tauglich (mindestens 44 pt) und brauchen keine Hover-Funktionen.
+Bedienelemente sind mindestens 44 pt groß und kommen ohne Hover aus. Hell- und Dunkelmodus werden unterstützt.
 
 ## 5. Kartenraster
 
-- **Hexagon-Raster** mit der Bibliothek H3, Auflösung 5 (ca. 250 km² pro Zelle, etwa 17 km Durchmesser). Das Raster ist in den Einstellungen änderbar.
-- 150 km Radius ergeben ca. **280 Zellen**. Das Wetter wird im Zellmittelpunkt abgefragt, gebündelt in wenigen Open-Meteo-Anfragen.
-- Zellen außerhalb Deutschlands oder des Radius werden nicht dargestellt.
-- **Graue Zelle** heißt „Aktivität hier nicht möglich“:
-  - **Städtebesuch** ist nur in Zellen mit einer Stadt ab **20.000 Einwohnern** (einstellbar) oder mit einer touristischen Altstadt laut OSM möglich.
-  - **Ski-Langlauf** ist nur in Zellen mit Loipen laut OSM (`piste:type=nordic`) möglich.
+- **H3-Hexagone, Auflösung 5** (ca. 250 km² bzw. 17 km pro Zelle). Bei 150 km Radius sind das z. B. **301 Gebiete** um Würzburg und **113** um Freiburg (Grenzlage).
+- Eine Zelle gehört dazu, wenn ihr Mittelpunkt im Radius **und** in Deutschland liegt.
+- Das Wetter wird am Zellmittelpunkt abgefragt. Die Klimawerte kommen von den Elternzellen (Auflösung 4, je ca. 7 Zellen zusammengefasst), um das Kontingent zu schonen.
+- **Grau** heißt „Aktivität hier nicht möglich“:
+  - Städtebesuch braucht eine Stadt ab **20 000 Einwohnern** (`place=city|town`) oder einen als „Altstadt“ benannten Stadtteil.
+  - Langlauf braucht eine Loipe (`piste:type=nordic`).
+  - Solange diese Daten fehlen, gilt die Aktivität als möglich. Die Vorschläge zeigen „Städtebesuch“ erst nach der Prüfung.
+- Beim Hineinzoomen wird die Gebietsfarbe durchsichtiger (Zoom 9 → 11,5), damit Straßen und Orte lesbar bleiben.
 
 ## 6. Bewertungslogik
 
-### 6.1 Tagesbewertung je Aktivität (Startwerte, in den Einstellungen änderbar)
+### 6.1 Tagesbewertung je Aktivität
 
-| Aktivität | 🟢 ideal | 🟡 möglich | 🔴 nicht empfehlenswert |
+Die Startwerte sollen in Stufe 5 änderbar werden. Temperatur bedeutet hier immer den **Tageshöchstwert**.
+
+| Aktivität | 🟢 sehr gut | 🟡 mäßig | 🔴 nicht empfehlenswert |
 |---|---|---|---|
-| Wandern | 8–24 °C, Regen < 1 mm, Wind < 30 km/h | 0–30 °C, Regen < 5 mm, Wind < 50 km/h | sonst / Gewitter |
-| Radfahren | 12–26 °C, Regen < 0,5 mm, Wind < 25 km/h | 5–30 °C, Regen < 3 mm, Wind < 40 km/h | sonst / Gewitter |
-| Ski-Langlauf | Schneehöhe ≥ 20 cm, −12 bis 0 °C, kein Regen | Schnee 10–20 cm oder bis +3 °C | < 10 cm Schnee / Regen |
-| Städtebesuch | Regen < 2 mm, 5–28 °C | Regen < 8 mm | Unwetter / Starkregen |
+| Wandern | 8–24 °C, Regen < 1 mm, Wind < 30 km/h | 0–30 °C, Regen < 5 mm, Wind < 50 km/h | sonst |
+| Radfahren | 12–26 °C, Regen < 0,5 mm, Wind < 25 km/h | 5–30 °C, Regen < 3 mm, Wind < 40 km/h | sonst |
+| Ski-Langlauf | Schneehöhe ≥ 20 cm, max. ≤ 0 °C **und** min. ≥ −12 °C, Regen < 0,5 mm | Schneehöhe ≥ 10 cm, max. ≤ 3 °C, Regen < 0,5 mm | sonst |
+| Städtebesuch | Regen < 2 mm, 5–28 °C | Regen < 8 mm | sonst |
 
-Eine Stufe gilt nur, wenn **alle** ihre Bedingungen erfüllt sind. Sonst wird die nächstschlechtere Stufe geprüft.
+Für alle Aktivitäten gilt: **Gewitter** (WMO-Code 95/96/99) oder **Sturmböen ≥ 60 km/h** ergeben immer rot.
 
-### 6.2 Camping-Wetter (ohne Aktivitätsauswahl)
+Eine Stufe gilt nur, wenn alle ihre Bedingungen erfüllt sind. Als Begründung wird die erste nicht erfüllte Bedingung angezeigt, z. B. „3 mm Regen“ oder „kühl (max. 0 °C)“.
+
+### 6.2 Camping-Wetter (ohne Aktivität)
 
 | Farbe | Regel (pro Tag) |
 |---|---|
-| 🟢 ideal | Regen < 1 mm – **Schneefall in jeder Menge zählt als ideal** |
+| 🟢 ideal | Regen < 1 mm (Schneefall in jeder Menge ist ideal) |
 | 🟡 so lala | Regen 1–5 mm |
 | 🔴 schlecht | Regen ≥ 5 mm **oder** Gewitter **oder** Sturmböen ≥ 60 km/h |
 
-- **Regen** ist die Summe aus Regen und Schauern (`rain_sum + showers_sum`). **Schneeregen** zählt über seinen Regenanteil als Regen.
-- **Gewitter** wird über die WMO-Wettercodes 95, 96 und 99 erkannt.
-- **Temperatur und Sonnenscheindauer** werden angezeigt, fließen aber **nicht** in die Farbe ein.
+- **Regen** ist die Summe aus Regen und Schauern. Schneeregen zählt über seinen Regenanteil.
+- Temperatur und Sonnenscheindauer werden nur angezeigt.
+- Bei Klimawerten entfällt die Gewitter-Erkennung, weil der Wettercode im Mittel nicht sinnvoll ist.
 
-### 6.3 Zusammenfassung mehrerer Tage
+### 6.3 Mehrere Tage
 
-- **Gesamtfarbe:** Es zählt der **beste Tag** im Zeitraum, denn ein guter Tag reicht.
-- Mit dem **Tages-Schieberegler** wird jeder Tag einzeln angezeigt.
+Die **Gesamtfarbe** richtet sich nach dem besten Tag. Über die Tagesauswahl lässt sich jeder Tag einzeln ansehen.
 
-### 6.4 Zwei Aktivitäten (Rang 1 / Rang 2)
+### 6.4 Zwei Aktivitäten
 
-- Eine Aktivität entspricht 100 %.
-- Bei zwei Aktivitäten **färbt Rang 1 die Fläche**. Rang 2 erscheint als **kleines farbiges Icon** in der Zelle.
-- Popup und Merkliste zeigen beide Bewertungen getrennt, z. B. „Wandern: sehr gut · Ski-Langlauf: mäßig“.
+- **Rang 1** färbt die Fläche.
+- **Rang 2** erscheint als farbiger Punkt, aber **nur wo die Aktivität möglich ist**. Graue Punkte werden ausgeblendet, weil sie die Karte unruhig machen.
+- Gebietsdetails und Platzdetails zeigen beide Bewertungen getrennt.
 
-### 6.5 Begründung
+### 6.5 Vorschläge (ohne Aktivität)
 
-Zu jeder Farbe wird der ausschlaggebende Grund gespeichert und im Popup angezeigt, z. B. „🟡 Sa: 3,8 mm Regen“.
+- Für jede Aktivität wird gezählt, in wie vielen Gebieten sie „sehr gut“ ist (ersatzweise „mäßig“).
+- Vorgeschlagen wird das **nächstgelegene** passende Gebiet, mit dem nächsten Ort als Name. Es gibt höchstens 3 Vorschläge.
+- Langlauf wird nur von November bis April geprüft.
+- Ein Tipp auf einen Vorschlag setzt die Aktivität als Rang 1, wählt das Gebiet aus und zentriert die Karte darauf.
 
-### 6.6 Infofeld (ohne Aktivitätsauswahl)
+### 6.6 Wetterwerte (Open-Meteo)
 
-- Zeigt die **Top-3-Vorschläge** „Aktivität + Region“, z. B. „Wandern – Schwarzwald-Nord“.
-- Ein Klick auf einen Vorschlag aktiviert die Aktivität und zentriert die Karte.
-
-### 6.7 Benötigte Wetterwerte (Open-Meteo, täglich)
-
-| Kategorie | Werte |
-|---|---|
-| Temperatur | `temperature_2m_max`, `temperature_2m_min` |
-| Niederschlag | `rain_sum`, `showers_sum`, `snowfall_sum` |
-| Wind | `wind_speed_10m_max`, `wind_gusts_10m_max` |
-| Wetterlage | `weather_code`, `sunshine_duration` |
-| Schnee (stündlich) | `snow_depth` (für Langlauf, Tageswert = Maximum) |
+Täglich: `temperature_2m_max/min`, `rain_sum`, `showers_sum`, `snowfall_sum`, `wind_speed_10m_max`, `wind_gusts_10m_max`, `weather_code`, `sunshine_duration`.
+Stündlich: `snow_depth` (für die Schneehöhe zählt das Tagesmaximum). Zeitzone Europe/Berlin.
 
 ## 7. Übernachtungsplätze
 
-### 7.1 Typen und Symbole
+### 7.1 Auswahl und Typen
 
-| # | Typ | Symbol | OSM-Zuordnung (vorläufig, in Stufe 3 an echten Daten prüfen) |
-|---|---|---|---|
-| 1 | Campingplatz | ⛺ | `tourism=camp_site` |
-| 2 | Wohnmobilstellplatz / Reisemobilhafen | 🚐 | `tourism=caravan_site` |
-| 3 | Privater Stellplatz | 🏠 | `caravan_site` / `camp_site` mit `operator:type=private` oder `access=customers` bzw. `access=private` |
-| 4 | Bauernhof | 🐄 | Platz mit Hofbezug (z. B. `farm=yes`, Lage auf `landuse=farmyard`, Name enthält „Hof“) |
-| 5 | Weingut | 🍇 | Platz mit Weingutbezug (z. B. `craft=winery` am selben Objekt oder direkt angrenzend) |
-| 6 | Sonstiges | ✨ | übrige Übernachtungsplätze, z. B. Tiercamping |
+**Berücksichtigt:** `tourism=camp_site` und `tourism=caravan_site` innerhalb des Zellumrisses.
 
-- **Regel:** Es erscheinen nur Orte, die **ausdrücklich** als Übernachtungsplatz erfasst sind. Höfe und Weingüter ohne ausgewiesenen Platz werden nicht gezeigt.
-- Zusätzlich bietet jede Zelle Links „Diese Region auf Landvergnügen / Alpaca Camping / park4night öffnen“.
+**Ausgeschlossen**, weil für das Wohnmobil ungeeignet:
+- `motorhome=no`
+- Zeltplätze mit `caravans=no`, sofern nicht `motorhome=yes`
+- Trekking- und Wildnisplätze (`backcountry=yes`, `camp_site=backcountry`)
+- Gruppen- und Pfadfinderplätze
+- stillgelegte Plätze und `access=no`
 
-### 7.2 Laden
+**Typ-Zuordnung**, Vorrang von oben nach unten:
 
-- Die Plätze werden **erst beim Klick auf eine Zelle** per Overpass geladen, als Abfrage über die Bounding-Box der Zelle.
-- Die Ergebnisse werden 24 h gecacht.
+| Typ | Symbol | Erkennung |
+|---|---|---|
+| Weingut | 🍇 | `craft=winery` / `shop=wine`, Name enthält Weingut, Winzer, Weinhof, Weinbau, Sektgut oder Weinkeller, **oder** ein Weingut in max. 200 m |
+| Bauernhof | 🐄 | `farm=yes`, `shop=farm`, `place=farm`, Name enthält Bauernhof, Ferienhof, Hofgut, Erlebnishof, Reiterhof, Biohof, Landhof, Gutshof oder Hofladen, **oder** ein Hof (`shop=farm`, `place=farm`, `landuse=farmyard`) in max. 200 m |
+| Sonstiges | ✨ | Name enthält Alpaka, Lama, Tierpark, Glamping, Tipi, Baumhaus oder Wildpark |
+| Privater Stellplatz | 🏠 | `operator:type=private` oder `access=customers|private|permit` |
+| Stellplatz / Reisemobilhafen | 🚐 | übrige `caravan_site` |
+| Campingplatz | ⛺ | übrige `camp_site` |
 
-### 7.3 Popup
+Ein Name, der nur „Hof“ enthält (z. B. „Campingplatz Seehof“), führt bewusst **nicht** zu 🐄.
+
+### 7.2 Öffnungsstatus
+
+- Ausgewertet wird `opening_hours` mit der Bibliothek `opening_hours` für **jeden Tag des Zeitraums**, einschließlich Saisonangaben wie „Apr-Oct“.
+- **offen** heißt an mindestens einem Tag geöffnet (sonst „teilweise geöffnet“), **geschlossen** heißt an keinem Tag.
+- Freitext wie „nach Absprache“, fehlende oder nicht auswertbare Angaben ergeben **unbekannt**.
+- Auf der Karte erscheinen geschlossene Plätze blass mit rot gestricheltem Rand, unbekannte mit grauem Rand.
+
+### 7.3 Laden
+
+- Die Plätze werden **beim Antippen eines Gebiets** geladen. Eine einzige Overpass-Abfrage holt die Plätze im Zellumriss sowie Weingüter, Höfe, Wander- und Radrouten und Loipen im Rahmen der Zelle (plus ca. 5 km).
+- Danach zoomt die Karte auf das Gebiet (höchstens Zoomstufe 12).
+- Das Gebiet zeigt Typ-Knöpfe mit Anzahl (ein- und ausblendbar, wird gespeichert), eine Platzliste (offene zuerst) und Links zu den externen Portalen.
+
+### 7.4 Platzdetails
+
+Die Details erscheinen im Bedienfeld statt als Karten-Popup, weil sie auf dem iPad im Hochformat so besser lesbar sind.
 
 | Abschnitt | Inhalt |
 |---|---|
-| Kopf | Name, Typ (Symbol), Öffnungsstatus (offen / geschlossen / unbekannt) |
-| Basisdaten | Ausstattung (Strom, Wasser, Entsorgung, WC, Dusche, WLAN, Hunde), Kosten, Webseite, Buchungsmöglichkeit, Luftlinie zum Mittelpunkt |
-| Quelle | „OpenStreetMap, Stand TT.MM.JJJJ“ + Link „in OSM ansehen“ |
-| Aktivität | Bewertung Rang 1 und Rang 2 getrennt, mit Farbe und Begründung; ohne Auswahl die geeigneten Aktivitäten |
-| Tourenempfehlung | 1–3 Sätze aus OSM-Routen im Umkreis, z. B. „Rundwanderweg X, 12 km“ (Wander-, Rad- und Loipenrelationen); Links zu Komoot / Outdooractive |
-| Aktionen | ☆ **Auf Merkliste** · **Route in Apple Karten öffnen** |
+| Kopf | Symbol, Name (ohne Namen: „Stellplatz (ohne Namen)“), Typ, nächster Ort, Luftlinie, Öffnungsstatus |
+| Merkliste | ☆ Auf die Merkliste bzw. ★ entfernen |
+| Basisdaten | Kosten (`charge`, sonst `fee`), Plätze (`capacity…`), Buchung (`reservation`), Webseite, Telefon |
+| Ausstattung | Strom, Frischwasser, Entsorgung, WC, Dusche, WLAN, Hunde, jeweils ✓, ✗ oder ? |
+| Quelle | OpenStreetMap mit Datum der letzten Bearbeitung und Link „in OSM ansehen“ |
+| Freizeitaktivitäten | alle 4 Aktivitäten mit Bewertung (bester Tag) und Grund; Rang 1/2 zuerst |
+| Tourenvorschlag | für bis zu 2 empfehlenswerte Aktivitäten, siehe 7.5 |
+| Aktionen | Links zu Komoot und Outdooractive, „Route in Apple Karten öffnen“ |
 
-Fehlende Werte erscheinen immer als „keine Angabe“.
+### 7.5 Tourenvorschläge
 
-## 8. Merkliste
+- **Wandern/Rad:** OSM-Routenrelationen (`hiking|foot` bzw. `bicycle|mtb`), deren Ausdehnung max. 10 km vom Platz entfernt liegt. Lokale Wege kommen vor regionalen und Fernwegen, danach entscheidet die Nähe. Text z. B. „Wanderweg ‚Rundweg Weinberge‘ (10 km, lokal, Einstieg ca. 1 km)“.
+- **Langlauf:** benannte Loipen im Umkreis von 10 km, mit Schwierigkeit.
+- **Städtebesuch:** nächste Stadt ab 20 000 Einwohnern im Umkreis von 40 km.
 
-- Eigene Ansicht als **Tabelle**.
-- **Spalten:** Name · Typ · Ort · Luftlinie · Wetter je Tag (Symbol, Temperatur min/max, Regen) · Ampel und empfohlene Aktivität (Rang 1/2) · Notiz · Löschen
-- Das Wetter wird beim Öffnen **live neu geladen** und nicht als alter Stand gespeichert.
-- **Offline** wird der letzte Stand mit Zeitstempel angezeigt.
-- Sortierbar nach Ampel und Entfernung.
-- **CSV-Export** der Tabelle.
+## 8. Merkliste (Stufe 4)
 
-## 9. Einstellungen
+- **Bereits umgesetzt:** Speichern und Entfernen aus den Platzdetails. Gespeichert werden Name, Typ, Position, Ort, Gebiet, Webseite, Datum und Notiz (IndexedDB).
+- **Ansicht:** eigene Tabelle mit den Spalten Name · Typ · Ort · Luftlinie · Wetter je Tag (Symbol, max/min, Regen) · Ampel und empfohlene Aktivität (Rang 1/2) · Notiz · Löschen.
+- Das Wetter wird beim Öffnen **live** geladen. Offline erscheint der letzte Stand mit Zeitstempel.
+- Sortierbar nach Ampel und Entfernung, Export als CSV.
 
-- Heimatadresse
-- Standardradius
-- Hexagon-Größe
-- Schwellwerte je Aktivität und für das Camping-Wetter
-- Mindestgröße der Stadt für Städtebesuch
-- Sichtbare Platztypen
-- **Export / Import** von Merkliste und Einstellungen als JSON, für Backup und Abgleich iPad ↔ Mac (z. B. über iCloud Drive)
+## 9. Einstellungen (Stufe 5)
+
+- **Bereits gespeichert:** Heimatadresse, Radius, Rang 1/2, ausgeblendete Platztypen
+- **Noch einzurichten:**
+  - Einstellungsseite für Hexagon-Größe, Schwellwerte je Aktivität und Camping-Wetter sowie Mindestgröße der Stadt
+  - JSON-Export/-Import von Merkliste und Einstellungen (Backup und Abgleich iPad ↔ Mac, z. B. über iCloud Drive)
 
 ## 10. Technik
 
 | Baustein | Wahl |
 |---|---|
-| Build | Vite + TypeScript |
+| Build | Vite + TypeScript, Tests mit Vitest |
 | UI | React |
-| Karte | MapLibre GL JS |
+| Karte | MapLibre GL JS. Der Worker wird über `?worker&url` eingebunden und per `setWorkerUrl` gesetzt, sonst lädt die Karte nach dem Build nicht. |
 | Raster | h3-js |
-| Geometrie | Turf.js (Radius, Landesgrenze) |
-| Speicher | IndexedDB (Merkliste, Einstellungen, Cache) |
-| PWA | Web-App-Manifest + Service Worker (App-Hülle und Merkliste offline) |
-| Deployment | GitHub Actions → GitHub Pages |
+| Geometrie | Turf (Kreis, Punkt-in-Polygon) |
+| Öffnungszeiten | opening_hours |
+| Speicher | IndexedDB über idb-keyval (Einstellungen, Merkliste), jeder Zugriff fehlertolerant |
+| PWA | Manifest + Service Worker (Stufe 5) |
+| Deployment | GitHub Actions → GitHub Pages (Tests und Build laufen vor jedem Deployment) |
 
-**Wichtig – Speicher in Safari:** Bei Websites, die nur im Browser-Tab genutzt werden, kann Safari lokal gespeicherte Daten nach einigen Wochen ohne Nutzung löschen. Als **Home-Bildschirm-App** installiert ist das nicht der Fall. Deshalb gilt:
-- App auf beiden Geräten zum Home-Bildschirm bzw. Dock hinzufügen.
-- Regelmäßig JSON-Backups erstellen.
+**Wichtig, Speicher in Safari:** Bei reiner Browsernutzung kann Safari lokale Daten nach einigen Wochen ohne Nutzung löschen. Als Home-Bildschirm-App passiert das nicht. Deshalb gilt:
+- auf beiden Geräten installieren,
+- regelmäßig ein JSON-Backup machen (Stufe 5).
 
 ## 11. Sicherheit und Datenschutz
 
-- Kein Backend, keine API-Keys, keine Geheimnisse im Code. Das öffentliche Repository verrät nur, wie die App funktioniert.
-- Heimatadresse und Merkliste liegen nur auf dem Gerät, nie im Repository.
-- Externe Dienste sehen IP-Adresse und abgefragte Koordinaten, aber kein Konto und keinen Namen.
-- Das Hauptrisiko ist die Übernahme des GitHub-Accounts. Deshalb ist **2FA** (Passkey oder Authenticator-App) Pflicht.
-- Ein Wechsel zu Cloudflare Pages mit Zugriffsschutz ist später ohne Codeänderung möglich.
+- Kein Backend, keine API-Keys, keine Geheimnisse im Code.
+- Heimatadresse und Merkliste liegen nur auf dem Gerät.
+- Externe Dienste sehen IP-Adresse und abgefragte Koordinaten, aber kein Konto.
+- Hauptrisiko ist die Übernahme des GitHub-Accounts, daher ist 2FA Pflicht.
 
 ## 12. Umsetzung in Stufen
 
-Nach jeder Stufe gibt es eine lauffähige, online erreichbare Version zum Testen.
-
-| Stufe | Umfang | Ergebnis |
+| Stufe | Umfang | Status |
 |---|---|---|
-| 1 | Projektgerüst, Deployment, Karte, Geolocation/Adresse/Heimat, Radius, Hexagon-Raster, Landesgrenze | Karte mit Raster um den Standort |
-| 2 | Wetterabruf, Camping-Wetter, Aktivitätsregeln, Rang 1/2, Tages-Schieberegler, Begründungen, Infofeld, graue Zellen | **Erster echter Nutzen:** Wo ist am Wochenende gutes Wetter? |
-| 3 | Overpass-Abfrage pro Zelle, Typ-Zuordnung, Symbole, Legende, Popup, Tourenempfehlung, externe Links | Plätze finden und vergleichen |
-| 4 | Merkliste mit Live-Wetter, Sortierung, Notizen, CSV-Export | Auswahl treffen |
-| 5 | Einstellungsseite, JSON-Backup, PWA-Installation, Offline-Cache | alltagstauglich |
+| 1 | Projektgerüst, Deployment, Karte, Standort/Adresse/Heimat, Radius, Hexagon-Raster, Landesgrenze | ✅ online |
+| 2 | Wetter, Camping-Wetter, Aktivitätsregeln, Rang 1/2, Tagesauswahl, Begründungen, Vorschläge, graue Gebiete | ✅ online |
+| 3 | Plätze je Gebiet, Typ-Zuordnung, Symbole, Platzliste, Details, Öffnungsstatus, Touren, externe Links, Merkliste speichern | ✅ online |
+| 4 | Merkliste als Tabelle mit Live-Wetter, Sortierung, Notizen, CSV-Export | offen |
+| 5 | Einstellungsseite, JSON-Backup, PWA-Installation, Offline-Cache | offen |
 
-## 13. Offene Punkte zur Klärung während der Umsetzung
+## 13. Erfahrungen aus der Umsetzung
 
-1. Die OSM-Zuordnung für die Typen 3–6 (privat, Bauernhof, Weingut, Sonstiges) wird in Stufe 3 an echten Daten geprüft und bei Bedarf angepasst.
-2. Die Formate der Links zu park4night, Landvergnügen und Alpaca Camping werden geprüft. Wo es keine Regionssuche per URL gibt, wird auf die Startseite verlinkt.
-3. Die Hexagon-Größe wird in Stufe 2 an echten Wetterdaten feinjustiert.
+1. **Abfragelimit Open-Meteo:** Beim Start wurde das Wetter zunächst doppelt geladen, einmal für den Ersatz-Mittelpunkt und einmal für den Standort. Das hat das Limit erreicht. Die Abhilfe:
+   - Es wird erst nach dem Ortungsversuch geladen.
+   - Radius-Änderungen werden entprellt (400 ms).
+   - Bereits geladene Gebiete werden zwischengespeichert (Prognose 1 h, Klima 7 Tage).
+   - Bei einem Fehler bleiben die geladenen Gebiete sichtbar, und nach einem Limit wird nach 65 s automatisch nachgeladen.
 
-## 14. Spätere Ausbaustufen (nicht Teil des MVP)
+   Häufiges Verstellen von Radius oder Mittelpunkt kann das Limit trotzdem kurz auslösen.
+2. **Overpass ist unzuverlässig:** Der Hauptserver ist oft ausgelastet, deshalb gibt es den Ersatzserver. Aus Rechenzentren (z. B. der Entwicklungsumgebung) brechen Overpass und Geofabrik die Verbindung ab. Die OSM-Funktionen wurden deshalb mit realistischen Testdaten geprüft und auf dem iPad bestätigt.
+3. **MapLibre-Worker:** Nach dem Build fand MapLibre seinen Worker nicht. Behoben durch explizites Einbinden.
+4. **Bottom-Sheet:** Im Hochformat verdeckte das Sheet den Mittelpunkt. Behoben, indem Einpassen und Zoomen die Sheet-Höhe berücksichtigen.
+5. **Kartenstil:** Die Ortsnamen waren teils englisch. Umgestellt auf `name:de`.
+6. **Freitext-Öffnungszeiten:** Ein Wert wie „nach Absprache“ wurde zunächst als „geöffnet“ gewertet. Jetzt ergibt er „unbekannt“.
+7. **Lesbarkeit:** Graue Rang-2-Punkte werden ausgeblendet, und die Flächen werden beim Zoomen transparent.
+
+## 14. Offene Punkte
+
+1. Die **Typ-Zuordnung** (privat, Bauernhof, Weingut, Sonstiges) ist noch nicht an echten OSM-Auszügen geprüft. Fehlzuordnungen bitte mit dem Link „in OSM ansehen“ melden, dann werden die Regeln nachgeschärft.
+2. **Regionslinks** zu park4night, Landvergnügen, Alpaca Camping, Komoot und Outdooractive sind ungeprüft, im Moment sind nur die Startseiten verlinkt.
+3. **Hexagon-Größe:** Auflösung 5 hat sich bewährt, wird in Stufe 5 aber einstellbar.
+4. **Wetter-Kontingent:** Bei großen Radien (> 250 km, also mehr als 600 Gebiete) greift das Minutenlimit sicher. Ein Hinweis in der App oder eine automatische Vergröberung des Rasters wäre denkbar.
+
+## 15. Spätere Ausbaustufen (nicht Teil des MVP)
 
 - Sync zwischen iPad und Mac (z. B. über ein privates GitHub-Gist)
 - KI-formulierte Tourenbeschreibungen
@@ -256,10 +297,10 @@ Nach jeder Stufe gibt es eine lauffähige, online erreichbare Version zum Testen
 | Q10 | Offline | nur Merkliste und letzter Stand |
 | Q11 | Entfernung | Luftlinie + Apple-Karten-Link |
 | Q12 | Aktivitätsregeln | Tabelle 6.1 |
-| Q13 | Mehrere Tage | bester Tag + Tages-Schieberegler |
-| Q14/Q21 | Gewichtung | max. 2 Aktivitäten, Rang 1 färbt, Rang 2 als Icon |
+| Q13 | Mehrere Tage | bester Tag + Tagesauswahl |
+| Q14/Q21 | Gewichtung | max. 2 Aktivitäten, Rang 1 färbt, Rang 2 als Punkt |
 | Q15/Q22 | Ohne Aktivität | Camping-Wetter nach Regen; Schnee ideal; Gewitter/Sturm rot; Temperatur nur Anzeige |
-| Q16 | Stadt / Loipe | nur Zellen mit Stadt bzw. Loipe, sonst grau |
+| Q16 | Stadt / Loipe | nur Gebiete mit Stadt bzw. Loipe, sonst grau |
 | Q17 | Höfe/Weingüter | nur ausdrücklich ausgewiesene Plätze |
 | Q18 | Typen | 6 Kategorien |
 | Q19 | Fehlende Felder | „keine Angabe“ |
@@ -271,4 +312,5 @@ Nach jeder Stufe gibt es eine lauffähige, online erreichbare Version zum Testen
 | Q27 | Einstellungen | siehe Abschnitt 9 |
 | Q28 | Sync | manuell per JSON |
 | Q29 | MVP | 5 Stufen |
-| Q30 | Dokumentation | dieses Papier als README / Spezifikation |
+| Q30 | Dokumentation | dieses Papier |
+| – | Umsetzung | Platzdetails im Bedienfeld statt Karten-Popup (bessere Lesbarkeit auf dem iPad) |
