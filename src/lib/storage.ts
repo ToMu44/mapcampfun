@@ -1,6 +1,7 @@
 import { get, set } from 'idb-keyval';
 import type { LatLng } from './geo';
 import type { Activity } from './rating';
+import type { PlaceType } from './places';
 
 export type Place = LatLng & { label: string; fullLabel?: string };
 
@@ -13,9 +14,11 @@ export type Settings = {
   rank2: Activity | null;
   /** Mindest-Einwohnerzahl für „Städtebesuch“ */
   cityMinPopulation: number;
+  /** ausgeblendete Platztypen */
+  hiddenTypes: PlaceType[];
 };
 
-export const DEFAULT_SETTINGS: Settings = { home: null, radiusKm: 150, hexResolution: 5, rank1: null, rank2: null, cityMinPopulation: 20000 };
+export const DEFAULT_SETTINGS: Settings = { home: null, radiusKm: 150, hexResolution: 5, rank1: null, rank2: null, cityMinPopulation: 20000, hiddenTypes: [] };
 
 const KEY = 'settings-v1';
 

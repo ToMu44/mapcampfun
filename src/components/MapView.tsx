@@ -23,7 +23,14 @@ const levelColor = (prop: string): ExpressionSpecification => [
   '#6b8f7d',
 ];
 
+export type MapPlace = { key: string; lat: number; lng: number; icon: string; title: string; state: 'open' | 'closed' | 'unknown' };
+
 type Props = {
+  places: MapPlace[];
+  selectedPlaceKey: string | null;
+  onSelectPlace: (key: string) => void;
+  /** Karte auf diesen Rahmen [W, S, O, N] einpassen, sobald sich `seq` ändert */
+  fitTo: { bbox: [number, number, number, number]; seq: number } | null;
   center: LatLng;
   radiusKm: number;
   cells: FeatureCollection<Polygon, MapCellProps>;
@@ -34,13 +41,16 @@ type Props = {
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-export function MapView({ center, radiusKm, cells, selectedCellId, focus, onSelectCell }: Props) {
+export function MapView({ places, selectedPlaceKey, onSelectPlace, fitTo, center, radiusKm, cells, selectedCellId, focus, onSelectCell }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const readyRef = useRef(false);
   const onSelectRef = useRef(onSelectCell);
   onSelectRef.current = onSelectCell;
+  const onPlaceRef = useRef(onSelectPlace);
+  onPlaceRef.current = onSelectPlace;
+  const placeMarkers = useRef(new Map<string, maplibregl.Marker>());
   const latest = useRef({ center, radiusKm, cells, selectedCellId });
   latest.current = { center, radiusKm, cells, selectedCellId };
 
@@ -69,7 +79,10 @@ export function MapView({ center, radiusKm, cells, selectedCellId, focus, onSele
 
       map.addLayer({ id: 'grid-fill', type: 'fill', source: 'grid', paint: {
         'fill-color': levelColor('level'),
-        'fill-opacity': ['case', ['==', ['get', 'level'], 'none'], 0.08, ['==', ['get', 'level'], 'grey'], 0.3, 0.5],
+        // Beim Hineinzoomen transparenter, damit Straßen und Orte lesbar bleiben
+        'fill-opacity': ['interpolate', ['linear'], ['zoom'],
+          9, ['case', ['==', ['get', 'level'], 'none'], 0.08, ['==', ['get', 'level'], 'grey'], 0.3, 0.5],
+          11.5, ['case', ['==', ['get', 'level'], 'none'], 0.03, 0.12]],
       } });
       map.addLayer({ id: 'grid-line', type: 'line', source: 'grid', paint: {
         'line-color': '#ffffff', 'line-opacity': 0.7, 'line-width': 0.8,
@@ -132,6 +145,35 @@ export function MapView({ center, radiusKm, cells, selectedCellId, focus, onSele
     const map = mapRef.current;
     if (map && focus) map.easeTo({ center: [focus.lng, focus.lat], zoom: Math.max(map.getZoom(), 8), padding: { top: 0, left: 0, right: 0, bottom: overlayHeight() }, duration: 700 });
   }, [focus]);
+
+  // Platz-Symbole als HTML-Marker (Emoji, gut antippbar)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const current = placeMarkers.current;
+    const keep = new Set(places.map((p) => p.key));
+    for (const [k, m] of current) if (!keep.has(k)) { m.remove(); current.delete(k); }
+    for (const p of places) {
+      let m = current.get(p.key);
+      if (!m) {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.addEventListener('click', (e) => { e.stopPropagation(); onPlaceRef.current(p.key); });
+        m = new maplibregl.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map);
+        current.set(p.key, m);
+      }
+      const el = m.getElement();
+      el.className = `place-marker ${p.state}${p.key === selectedPlaceKey ? ' selected' : ''}`;
+      el.textContent = p.icon;
+      el.title = p.title;
+      el.setAttribute('aria-label', p.title);
+    }
+  }, [places, selectedPlaceKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && fitTo) map.fitBounds(fitTo.bbox, { padding: { top: 40, left: 40, right: 40, bottom: 40 + overlayHeight() }, duration: 700, maxZoom: 12 });
+  }, [fitTo]);
 
   return <div ref={containerRef} className="map" role="application" aria-label="Karte" />;
 }

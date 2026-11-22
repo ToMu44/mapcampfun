@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FeatureCollection, Polygon } from 'geojson';
-import { MapView, type MapCellProps } from './components/MapView';
+import { MapView, type MapCellProps, type MapPlace } from './components/MapView';
+import { CellPlaces } from './components/CellPlaces';
+import { PlaceDetails, activityLines } from './components/PlaceDetails';
 import { Sidebar } from './components/Sidebar';
 import { ActivityPicker, DaySlider, InfoPanel, Legend, PeriodPicker, type Period } from './components/Controls';
 import { CellDetails } from './components/CellDetails';
@@ -9,9 +11,13 @@ import { geolocationErrorText, getCurrentPosition, reverseGeocode, searchAddress
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Place, type Settings } from './lib/storage';
 import { daysBetween, fromIso, nextWeekend } from './lib/period';
 import { fetchWeather, type DayWeather } from './lib/weather';
-import { cityCells, fetchLoipenCells, fetchTowns, type Town } from './lib/osm';
-import { displayLevel, evaluateCell, nearestTown, suggestions, type Availability, type Suggestion } from './lib/evaluate';
-import type { Activity } from './lib/rating';
+import { cityCells, fetchCellData, fetchLoipenCells, fetchTowns, type CellData, type Town } from './lib/osm';
+import { classify, defaultName, isUsable, openStatus, placeTypeInfo, website, type CampPlace, type PlaceType } from './lib/places';
+import { tourHint } from './lib/tours';
+import { loadWatchlist, saveWatchlist, type WatchItem } from './lib/watchlist';
+import { distanceKm } from './lib/geo';
+import { displayLevel, evaluateCell, isAvailable, nearestTown, rateDays, suggestions, type Availability, type Suggestion } from './lib/evaluate';
+import { ACTIVITIES, type Activity, type Rating } from './lib/rating';
 
 const FALLBACK: Place = { ...GERMANY_CENTER, label: 'Mitte Deutschlands' };
 
@@ -37,6 +43,13 @@ export function App() {
   const [towns, setTowns] = useState<Town[] | null>(null);
   const [loipen, setLoipen] = useState<Set<string> | null>(null);
   const [osmError, setOsmError] = useState<string | null>(null);
+
+  const [cellData, setCellData] = useState<{ cellId: string; data: CellData | null; loading: boolean; error: string | null } | null>(null);
+  const [cellReload, setCellReload] = useState(0);
+  const [selectedPlaceKey, setSelectedPlaceKey] = useState<string | null>(null);
+  const [fitTo, setFitTo] = useState<{ bbox: [number, number, number, number]; seq: number } | null>(null);
+  const [watchlist, setWatchlist] = useState<WatchItem[]>([]);
+  useEffect(() => { void loadWatchlist().then(setWatchlist); }, []);
 
   const { rank1, rank2, radiusKm, hexResolution } = settings;
 
@@ -176,6 +189,66 @@ export function App() {
     [rank1, weather, grid, availability, towns, period, loipen, dayIndex],
   );
 
+  // ---------- Stufe 3: Plätze im gewählten Gebiet ----------
+  const selectedPlaceName = selectedCell && towns ? nearestTown(selectedCell.lat, selectedCell.lng, towns)?.town.name ?? null : null;
+  const selectedFeature = useMemo(() => (selectedCell ? grid.features.find((f) => f.properties.id === selectedCell.id) ?? null : null), [grid, selectedCell]);
+
+  useEffect(() => {
+    setSelectedPlaceKey(null);
+    if (!selectedFeature) { setCellData(null); return; }
+    const id = selectedFeature.properties.id;
+    const ring = selectedFeature.geometry.coordinates[0];
+    const ctrl = new AbortController();
+    setCellData({ cellId: id, data: null, loading: true, error: null });
+    fetchCellData(ring, ctrl.signal).then(
+      (data) => {
+        setCellData({ cellId: id, data, loading: false, error: null });
+        const lngs = ring.map((p) => p[0]);
+        const lats = ring.map((p) => p[1]);
+        setFitTo({ bbox: [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)], seq: Date.now() });
+      },
+      (err) => { if (!ctrl.signal.aborted) setCellData({ cellId: id, data: null, loading: false, error: err instanceof Error ? err.message : String(err) }); },
+    );
+    return () => ctrl.abort();
+  }, [selectedFeature, cellReload]);
+
+  const places: CampPlace[] = useMemo(() => {
+    const d = cellData?.data;
+    if (!d) return [];
+    const n = { wineries: d.wineries, farms: d.farms };
+    return d.sites.filter((s) => isUsable(s.tags)).map((s) => {
+      const type = classify(s.tags, s, n);
+      return { key: s.key, lat: s.lat, lng: s.lng, tags: s.tags, lastEdit: s.lastEdit, type, name: s.tags.name ?? defaultName(type) };
+    });
+  }, [cellData]);
+
+  const statuses = useMemo(() => new Map(places.map((p) => [p.key, openStatus(p.tags, days, p)])), [places, days]);
+  const hiddenTypes = settings.hiddenTypes;
+  const mapPlaces: MapPlace[] = useMemo(() => places.filter((p) => !hiddenTypes.includes(p.type)).map((p) => ({
+    key: p.key, lat: p.lat, lng: p.lng, icon: placeTypeInfo(p.type).icon, title: p.name, state: statuses.get(p.key)?.state ?? 'unknown',
+  })), [places, hiddenTypes, statuses]);
+
+  const selectedPlace = places.find((p) => p.key === selectedPlaceKey) ?? null;
+  const toggleType = (t: PlaceType) => updateSettings({ hiddenTypes: hiddenTypes.includes(t) ? hiddenTypes.filter((x) => x !== t) : [...hiddenTypes, t] });
+
+  const placeActivities = useMemo(() => {
+    if (!selectedPlace || !selectedCell || !cellData?.data) return null;
+    const wx = weather?.get(selectedCell.id);
+    if (!wx?.length) return null;
+    const per = Object.fromEntries(ACTIVITIES.map(({ id }) => [id, rateDays(id, wx, selectedCell.id, availability)])) as Record<Activity, Rating[]>;
+    const data = cellData.data;
+    return activityLines(per, rank1, rank2, (a) => (isAvailable(a, selectedCell.id, availability) ? tourHint(a, selectedPlace, data, towns) : null));
+  }, [selectedPlace, selectedCell, cellData, weather, availability, rank1, rank2, towns]);
+
+  const isSaved = (key: string) => watchlist.some((w) => w.key === key);
+  const toggleSave = (p: CampPlace) => {
+    const next = isSaved(p.key)
+      ? watchlist.filter((w) => w.key !== p.key)
+      : [...watchlist, { key: p.key, name: p.name, type: p.type, lat: p.lat, lng: p.lng, place: selectedPlaceName, cellId: selectedCell?.id ?? '', website: website(p.tags), addedAt: new Date().toISOString(), note: '' }];
+    setWatchlist(next);
+    void saveWatchlist(next);
+  };
+
   const pickSuggestion = (s: Suggestion) => {
     updateSettings({ rank1: s.activity, rank2: null });
     setSelectedCell(s.cell);
@@ -184,14 +257,13 @@ export function App() {
 
   const setActivities = (r1: Activity | null, r2: Activity | null) => updateSettings({ rank1: r1, rank2: r2 });
 
-  const selectedPlace = selectedCell && towns ? nearestTown(selectedCell.lat, selectedCell.lng, towns)?.town.name ?? null : null;
   const loadingNote = wxLoading ? 'Wetter wird geladen …' : null;
   const errorNote = wxError ?? (osmError ? `${osmError} Städte/Loipen werden ohne OSM-Prüfung bewertet.` : null);
 
   return (
     <div className="app">
       <div className="map-wrap">
-        <MapView center={center} radiusKm={radiusKm} cells={cells} selectedCellId={selectedCell?.id ?? null} focus={focus} onSelectCell={setSelectedCell} />
+        <MapView places={mapPlaces} selectedPlaceKey={selectedPlaceKey} onSelectPlace={setSelectedPlaceKey} fitTo={fitTo} center={center} radiusKm={radiusKm} cells={cells} selectedCellId={selectedCell?.id ?? null} focus={focus} onSelectCell={setSelectedCell} />
         <Legend rank1={rank1} rank2={rank2} />
         {loadingNote && <div className="map-badge" role="status">{loadingNote}</div>}
       </div>
@@ -208,8 +280,29 @@ export function App() {
         onUseHome={() => settings.home && moveTo(settings.home)}
         onSaveHome={() => { updateSettings({ home: center }); setStatus('Heimatadresse gespeichert.'); }}
         onRadius={(r) => { updateSettings({ radiusKm: r }); setSelectedCell(null); }}
-        details={selectedCell && (
-          <CellDetails cell={selectedCell} place={selectedPlace} ev={evals.get(selectedCell.id) ?? null} rank1={rank1} rank2={rank2} loading={wxLoading} />
+        details={selectedPlace ? (
+          <PlaceDetails
+            place={selectedPlace}
+            status={statuses.get(selectedPlace.key)!}
+            distanceKm={distanceKm(center, selectedPlace)}
+            near={nearestTown(selectedPlace.lat, selectedPlace.lng, towns ?? [])?.town.name ?? null}
+            activities={placeActivities}
+            saved={isSaved(selectedPlace.key)}
+            onToggleSave={() => toggleSave(selectedPlace)}
+            onBack={() => setSelectedPlaceKey(null)}
+          />
+        ) : selectedCell && (
+          <CellDetails cell={selectedCell} place={selectedPlaceName} ev={evals.get(selectedCell.id) ?? null} rank1={rank1} rank2={rank2} loading={wxLoading}>
+            <CellPlaces
+              loading={!!cellData?.loading}
+              error={cellData?.error ?? null}
+              rows={cellData?.data ? places.map((p) => ({ key: p.key, name: p.name, icon: placeTypeInfo(p.type).icon, type: p.type, state: statuses.get(p.key)?.state ?? 'unknown' })) : null}
+              hidden={hiddenTypes}
+              onToggleType={toggleType}
+              onSelect={setSelectedPlaceKey}
+              onRetry={() => setCellReload((n) => n + 1)}
+            />
+          </CellDetails>
         )}
       >
         <PeriodPicker value={period} onChange={setPeriod} />

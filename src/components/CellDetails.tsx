@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { CellProps } from '../lib/geo';
 import type { CellEval } from '../lib/evaluate';
 import { bestOf, CAMPING_TEXT, LEVEL_TEXT, activityLabel, type Activity, type Rating } from '../lib/rating';
@@ -8,17 +9,19 @@ import { LEVEL_COLORS } from './MapView';
 const n0 = (v: number | null, unit: string) => (v == null ? '–' : `${Math.round(v)}${unit}`);
 const n1 = (v: number | null, unit: string) => (v == null ? '–' : `${v.toLocaleString('de-DE', { maximumFractionDigits: 1 })}${unit}`);
 
-type Props = { cell: CellProps; place: string | null; ev: CellEval | null; rank1: Activity | null; rank2: Activity | null; loading: boolean };
+type Props = { cell: CellProps; place: string | null; ev: CellEval | null; rank1: Activity | null; rank2: Activity | null; loading: boolean; children?: ReactNode };
 
-export function CellDetails({ cell, place, ev, rank1, rank2, loading }: Props) {
+export function CellDetails({ cell, place, ev, rank1, rank2, loading, children }: Props) {
   return (
     <section>
       <h2>Gewähltes Gebiet</h2>
       <p className="cell-title"><strong>{place ? `bei ${place}` : 'Gebiet'}</strong> · {Math.round(cell.distanceKm)} km Luftlinie</p>
-      {!ev ? <p className="muted">{loading ? 'Wetter wird geladen …' : 'Keine Wetterdaten.'}</p> : (
+      {!ev ? <><p className="muted">{loading ? 'Wetter wird geladen …' : 'Keine Wetterdaten.'}</p>{children}</> : (
         <>
           <Summary label={rank1 ? activityLabel(rank1) : 'Camping-Wetter'} ratings={ev.primary} dates={ev.days.map((d) => d.date)} camping={!rank1} />
           {ev.secondary && rank2 && <Summary label={activityLabel(rank2)} ratings={ev.secondary} dates={ev.days.map((d) => d.date)} camping={false} />}
+          {children}
+          <h4>Wetter im Gebiet</h4>
           <div className="table-wrap">
             <table className="wx">
               <thead><tr><th>Tag</th><th></th><th>max/min</th><th>Regen</th><th>Schnee</th><th>Böen</th><th>Sonne</th></tr></thead>
@@ -44,7 +47,6 @@ export function CellDetails({ cell, place, ev, rank1, rank2, loading }: Props) {
           <p className="muted small">Böen in km/h. Schnee: Schneehöhe bzw. +Neuschnee in cm.{ev.days.some((d) => d.source === 'climate') && ' K = Klimamittel der letzten 3 Jahre, keine Prognose.'}</p>
         </>
       )}
-      <p className="hint">Stellplätze im Gebiet folgen in Stufe 3.</p>
     </section>
   );
 }

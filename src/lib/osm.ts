@@ -91,3 +91,81 @@ export function cityCells(towns: Town[], minPopulation: number, resolution: numb
   for (const t of towns) if (t.oldTown || t.population >= minPopulation) cells.add(latLngToCell(t.lat, t.lng, resolution));
   return cells;
 }
+
+// ---------- Stufe 3: Plätze und Touren je Gebiet ----------
+
+export type Route = {
+  key: string;
+  name: string;
+  kind: 'hiking' | 'cycling';
+  network: string | null;
+  distanceKm: number | null;
+  bounds: { minlat: number; minlon: number; maxlat: number; maxlon: number } | null;
+};
+export type Piste = { name: string; lat: number; lng: number; difficulty: string | null };
+export type CellData = {
+  sites: { key: string; lat: number; lng: number; tags: Record<string, string>; lastEdit: string | null }[];
+  wineries: { lat: number; lng: number }[];
+  farms: { lat: number; lng: number }[];
+  routes: Route[];
+  pistes: Piste[];
+};
+
+type ElFull = El & { id: number; timestamp?: string; bounds?: Route['bounds'] };
+
+/** Alles für ein Gebiet in einer Abfrage. `ring` = Zellumriss als [lng, lat]-Paare. */
+export async function fetchCellData(ring: number[][], signal?: AbortSignal): Promise<CellData> {
+  const poly = ring.map(([lng, lat]) => `${lat.toFixed(5)} ${lng.toFixed(5)}`).join(' ');
+  const lats = ring.map((p) => p[1]);
+  const lngs = ring.map((p) => p[0]);
+  // Etwas größerer Rahmen, damit Touren und Nachbarn am Rand mitkommen
+  const pad = 0.05;
+  const bb = `${(Math.min(...lats) - pad).toFixed(4)},${(Math.min(...lngs) - pad).toFixed(4)},${(Math.max(...lats) + pad).toFixed(4)},${(Math.max(...lngs) + pad).toFixed(4)}`;
+  const q = `[out:json][timeout:90];
+nwr["tourism"~"^(camp_site|caravan_site)$"](poly:"${poly}");
+out center meta;
+(
+  nwr["craft"="winery"](${bb});
+  nwr["shop"~"^(wine|farm)$"](${bb});
+  nwr["place"="farm"](${bb});
+  way["landuse"="farmyard"](${bb});
+);
+out center tags;
+relation["route"~"^(hiking|foot|bicycle|mtb)$"](${bb});
+out tags bb;
+way["piste:type"="nordic"](${bb});
+out center tags;`;
+  const els = (await overpass(q, signal)) as ElFull[];
+  const data: CellData = { sites: [], wineries: [], farms: [], routes: [], pistes: [] };
+  for (const el of els) {
+    const t = el.tags ?? {};
+    const p = point(el);
+    if (t.tourism === 'camp_site' || t.tourism === 'caravan_site') {
+      if (p) data.sites.push({ key: `${el.type}/${el.id}`, ...p, tags: t, lastEdit: el.timestamp ?? null });
+    } else if (t.route) {
+      data.routes.push({
+        key: `relation/${el.id}`,
+        name: t.name ?? t.ref ?? 'ohne Namen',
+        kind: t.route === 'bicycle' || t.route === 'mtb' ? 'cycling' : 'hiking',
+        network: t.network ?? null,
+        distanceKm: parseDistance(t.distance),
+        bounds: el.bounds ?? null,
+      });
+    } else if (t['piste:type'] === 'nordic') {
+      if (p && t.name) data.pistes.push({ name: t.name, ...p, difficulty: t['piste:difficulty'] ?? null });
+    } else if (p && (t.craft === 'winery' || t.shop === 'wine')) {
+      data.wineries.push(p);
+    } else if (p) {
+      data.farms.push(p);
+    }
+  }
+  return data;
+}
+
+export function parseDistance(s?: string): number | null {
+  if (!s) return null;
+  const m = s.replace(',', '.').match(/[\d.]+/);
+  if (!m) return null;
+  const v = parseFloat(m[0]);
+  return /m\b/.test(s) && !/km/.test(s) ? v / 1000 : v;
+}
