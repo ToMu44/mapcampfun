@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval';
 import type { LatLng } from './geo';
+import type { Activity } from './rating';
 
 export type Place = LatLng & { label: string; fullLabel?: string };
 
@@ -8,9 +9,13 @@ export type Settings = {
   radiusKm: number;
   /** H3-Auflösung des Rasters (5 ≈ 17 km Zellen) */
   hexResolution: number;
+  rank1: Activity | null;
+  rank2: Activity | null;
+  /** Mindest-Einwohnerzahl für „Städtebesuch“ */
+  cityMinPopulation: number;
 };
 
-export const DEFAULT_SETTINGS: Settings = { home: null, radiusKm: 150, hexResolution: 5 };
+export const DEFAULT_SETTINGS: Settings = { home: null, radiusKm: 150, hexResolution: 5, rank1: null, rank2: null, cityMinPopulation: 20000 };
 
 const KEY = 'settings-v1';
 

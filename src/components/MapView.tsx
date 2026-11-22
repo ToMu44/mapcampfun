@@ -1,36 +1,48 @@
 import { useEffect, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import type { GeoJSONSource, Map as MLMap, MapLayerMouseEvent } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MLMap, MapLayerMouseEvent, ExpressionSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // Vite bündelt den MapLibre-Worker als eigene Datei; ohne das findet MapLibre ihn nach dem Build nicht.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import type { FeatureCollection, Polygon } from 'geojson';
+import type { FeatureCollection, Point, Polygon } from 'geojson';
 import { circleBounds, radiusCircle, type CellProps, type LatLng } from '../lib/geo';
+import type { Level } from '../lib/rating';
+
+maplibregl.setWorkerUrl(workerUrl);
 
 // Kostenlose Vektorkarte ohne API-Key (OpenStreetMap-Daten).
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
+export type MapCellProps = CellProps & { level?: Level | 'none'; level2?: Level | 'none' };
+
+export const LEVEL_COLORS: Record<Level, string> = { green: '#2e9d5b', yellow: '#e2b02a', red: '#d24b3e', grey: '#9aa0a6' };
+
+const levelColor = (prop: string): ExpressionSpecification => [
+  'match', ['get', prop],
+  'green', LEVEL_COLORS.green, 'yellow', LEVEL_COLORS.yellow, 'red', LEVEL_COLORS.red, 'grey', LEVEL_COLORS.grey,
+  '#6b8f7d',
+];
+
 type Props = {
   center: LatLng;
   radiusKm: number;
-  grid: FeatureCollection<Polygon, CellProps>;
+  cells: FeatureCollection<Polygon, MapCellProps>;
   selectedCellId: string | null;
+  focus: { lat: number; lng: number; seq: number } | null;
   onSelectCell: (cell: CellProps | null) => void;
 };
 
-maplibregl.setWorkerUrl(workerUrl);
-
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-export function MapView({ center, radiusKm, grid, selectedCellId, onSelectCell }: Props) {
+export function MapView({ center, radiusKm, cells, selectedCellId, focus, onSelectCell }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const readyRef = useRef(false);
   const onSelectRef = useRef(onSelectCell);
   onSelectRef.current = onSelectCell;
-  const latest = useRef({ center, radiusKm, grid, selectedCellId });
-  latest.current = { center, radiusKm, grid, selectedCellId };
+  const latest = useRef({ center, radiusKm, cells, selectedCellId });
+  latest.current = { center, radiusKm, cells, selectedCellId };
 
   // Karte einmalig anlegen
   useEffect(() => {
@@ -50,17 +62,25 @@ export function MapView({ center, radiusKm, grid, selectedCellId, onSelectCell }
     mapRef.current = map;
 
     map.on('load', () => {
+      germanLabels(map);
       map.addSource('radius', { type: 'geojson', data: EMPTY });
       map.addSource('grid', { type: 'geojson', data: EMPTY });
+      map.addSource('rank2', { type: 'geojson', data: EMPTY });
 
       map.addLayer({ id: 'grid-fill', type: 'fill', source: 'grid', paint: {
-        'fill-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#2f6b4f', '#6b8f7d'],
-        'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.45, 0.12],
+        'fill-color': levelColor('level'),
+        'fill-opacity': ['case', ['==', ['get', 'level'], 'none'], 0.08, ['==', ['get', 'level'], 'grey'], 0.3, 0.5],
       } });
       map.addLayer({ id: 'grid-line', type: 'line', source: 'grid', paint: {
-        'line-color': '#2f6b4f',
-        'line-opacity': 0.55,
-        'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2.5, 0.7],
+        'line-color': '#ffffff', 'line-opacity': 0.7, 'line-width': 0.8,
+      } });
+      map.addLayer({ id: 'grid-selected', type: 'line', source: 'grid', filter: ['==', ['get', 'id'], ''], paint: {
+        'line-color': '#11231a', 'line-width': 3.5,
+      } });
+      map.addLayer({ id: 'rank2-dot', type: 'circle', source: 'rank2', paint: {
+        'circle-color': levelColor('level2'),
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 9, 7],
+        'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
       } });
       map.addLayer({ id: 'radius-line', type: 'line', source: 'radius', paint: {
         'line-color': '#1f4a36', 'line-width': 2, 'line-dasharray': [3, 2],
@@ -74,7 +94,8 @@ export function MapView({ center, radiusKm, grid, selectedCellId, onSelectCell }
       map.on('mouseleave', 'grid-fill', () => (map.getCanvas().style.cursor = ''));
 
       readyRef.current = true;
-      syncData(map, latest.current, true);
+      syncCells(map, latest.current.cells, latest.current.selectedCellId);
+      syncFrame(map, latest.current.center, latest.current.radiusKm);
     });
 
     return () => {
@@ -85,7 +106,7 @@ export function MapView({ center, radiusKm, grid, selectedCellId, onSelectCell }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Raster, Radius und Mittelpunkt aktualisieren
+  // Mittelpunkt/Radius → Kreis zeichnen und Karte einpassen
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -97,29 +118,39 @@ export function MapView({ center, radiusKm, grid, selectedCellId, onSelectCell }
     } else {
       markerRef.current.setLngLat([center.lng, center.lat]);
     }
-    if (readyRef.current) syncData(map, latest.current, true);
-  }, [center, radiusKm, grid]);
+    if (readyRef.current) syncFrame(map, center, radiusKm);
+  }, [center, radiusKm]);
 
-  // Auswahl hervorheben
+  // Färbung und Auswahl
   useEffect(() => {
     const map = mapRef.current;
-    if (map && readyRef.current) syncSelection(map, latest.current.grid, selectedCellId);
-  }, [selectedCellId, grid]);
+    if (map && readyRef.current) syncCells(map, cells, selectedCellId);
+  }, [cells, selectedCellId]);
+
+  // Fokus auf ein Gebiet (z. B. aus dem Infofeld)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && focus) map.easeTo({ center: [focus.lng, focus.lat], zoom: Math.max(map.getZoom(), 8), padding: { top: 0, left: 0, right: 0, bottom: overlayHeight() }, duration: 700 });
+  }, [focus]);
 
   return <div ref={containerRef} className="map" role="application" aria-label="Karte" />;
 }
 
-function syncData(map: MLMap, s: { center: LatLng; radiusKm: number; grid: FeatureCollection<Polygon, CellProps>; selectedCellId: string | null }, fit: boolean) {
-  (map.getSource('radius') as GeoJSONSource).setData(radiusCircle(s.center, s.radiusKm));
-  (map.getSource('grid') as GeoJSONSource).setData(s.grid);
-  syncSelection(map, s.grid, s.selectedCellId);
-  if (fit) map.fitBounds(circleBounds(s.center, s.radiusKm), { padding: { top: 24, left: 24, right: 24, bottom: 24 + overlayHeight() }, duration: 600 });
+function syncFrame(map: MLMap, center: LatLng, radiusKm: number) {
+  (map.getSource('radius') as GeoJSONSource).setData(radiusCircle(center, radiusKm));
+  map.fitBounds(circleBounds(center, radiusKm), { padding: { top: 24, left: 24, right: 24, bottom: 24 + overlayHeight() }, duration: 600 });
 }
 
-function syncSelection(map: MLMap, grid: FeatureCollection<Polygon, CellProps>, selectedCellId: string | null) {
-  map.removeFeatureState({ source: 'grid' });
-  const f = grid.features.find((x) => x.properties.id === selectedCellId);
-  if (f && f.id !== undefined) map.setFeatureState({ source: 'grid', id: f.id }, { selected: true });
+function syncCells(map: MLMap, cells: FeatureCollection<Polygon, MapCellProps>, selectedCellId: string | null) {
+  (map.getSource('grid') as GeoJSONSource).setData(cells);
+  const dots: FeatureCollection<Point> = {
+    type: 'FeatureCollection',
+    features: cells.features
+      .filter((f) => f.properties.level2 && f.properties.level2 !== 'none' && f.properties.level2 !== 'grey')
+      .map((f) => ({ type: 'Feature', properties: { level2: f.properties.level2 }, geometry: { type: 'Point', coordinates: [f.properties.lng, f.properties.lat] } })),
+  };
+  (map.getSource('rank2') as GeoJSONSource).setData(dots);
+  map.setFilter('grid-selected', ['==', ['get', 'id'], selectedCellId ?? '']);
 }
 
 /** Höhe des Bottom-Sheets, falls es die Karte überlagert (iPad hoch) – sonst 0. */
@@ -127,4 +158,15 @@ function overlayHeight(): number {
   const panel = document.querySelector<HTMLElement>('.panel');
   if (!panel || getComputedStyle(panel).position !== 'absolute') return 0;
   return Math.min(panel.offsetHeight, window.innerHeight * 0.6);
+}
+
+/** Ortsnamen auf Deutsch (Kartenstil zeigt sonst teils englische Namen). */
+function germanLabels(map: MLMap) {
+  for (const layer of map.getStyle().layers ?? []) {
+    if (layer.type !== 'symbol') continue;
+    const tf = map.getLayoutProperty(layer.id, 'text-field');
+    const src = JSON.stringify(tf ?? '');
+    if (!src.includes('name') || src.includes('ref')) continue; // Straßennummern unverändert lassen
+    map.setLayoutProperty(layer.id, 'text-field', ['coalesce', ['get', 'name:de'], ['get', 'name']]);
+  }
 }

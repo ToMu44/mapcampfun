@@ -1,5 +1,4 @@
-import { useState, type FormEvent } from 'react';
-import type { CellProps } from '../lib/geo';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import type { Place } from '../lib/storage';
 
 type Props = {
@@ -7,7 +6,9 @@ type Props = {
   home: Place | null;
   radiusKm: number;
   cellCount: number;
-  selectedCell: CellProps | null;
+  /** Oben im Bedienfeld (gewähltes Gebiet) */
+  details?: ReactNode;
+  children?: ReactNode;
   status: string | null;
   busy: boolean;
   onLocate: () => void;
@@ -42,6 +43,8 @@ export function Sidebar(p: Props) {
       </header>
 
       <div className="panel-body">
+        {p.status && <p className="status" role="status">{p.status}</p>}
+        {p.details}
         <section>
           <h2>Mittelpunkt</h2>
           <div className="row">
@@ -75,20 +78,8 @@ export function Sidebar(p: Props) {
           <p className="muted">{p.cellCount} Gebiete in Deutschland</p>
         </section>
 
-        <section>
-          <h2>Gewähltes Gebiet</h2>
-          {p.selectedCell ? (
-            <dl className="facts">
-              <dt>Mittelpunkt</dt><dd>{p.selectedCell.lat.toFixed(3)}, {p.selectedCell.lng.toFixed(3)}</dd>
-              <dt>Luftlinie</dt><dd>{Math.round(p.selectedCell.distanceKm)} km</dd>
-            </dl>
-          ) : (
-            <p className="muted">Tippe auf ein Gebiet der Karte.</p>
-          )}
-          <p className="hint">Wetterfärbung folgt in Stufe 2, Stellplätze in Stufe 3.</p>
-        </section>
+        {p.children}
 
-        {p.status && <p className="status" role="status">{p.status}</p>}
       </div>
     </aside>
   );

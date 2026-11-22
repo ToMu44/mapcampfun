@@ -108,3 +108,62 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
   .sheet-handle span { width: 44px; height: 5px; border-radius: 3px; background: var(--border); }
   .panel-head { padding-top: 0; }
 }
+
+/* ---------- Stufe 2: Wetter & Bewertung ---------- */
+.map-wrap { position: relative; min-height: 0; }
+.map-wrap .map { position: absolute; inset: 0; }
+
+.legend {
+  position: absolute; right: 12px; top: 12px; z-index: 1;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 3px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); max-width: 46vw;
+}
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; opacity: 0.85; flex: none; }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); border: 1.5px solid #fff; }
+
+.map-badge {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 1;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.dates label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 2px; }
+.dates input { width: 100%; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 0.9rem; }
+.field small { color: var(--muted); }
+select {
+  font: inherit; min-height: 44px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); padding: 0 10px;
+}
+select:disabled { opacity: 0.45; }
+
+.days { display: flex; flex-wrap: wrap; gap: 6px; }
+.days button { flex: none; background: var(--accent-soft); color: var(--text); font-weight: 500; padding: 0 10px; min-height: 40px; }
+.days button.on { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+
+.cell-title { margin: 0 0 8px; }
+.summary { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 8px; }
+.summary > i, .suggest-item > i { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 4px; }
+.summary small, .suggest small { color: var(--muted); }
+
+.table-wrap { overflow-x: auto; margin: 4px -4px 0; }
+table.wx { border-collapse: collapse; width: 100%; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+table.wx th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px; white-space: nowrap; }
+table.wx td { padding: 5px 4px; border-top: 1px solid var(--border); white-space: nowrap; }
+table.wx sup { color: var(--muted); margin-left: 2px; }
+td.dots { display: flex; gap: 4px; align-items: center; }
+i.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+i.dot.small { width: 8px; height: 8px; }
+.small { font-size: 0.78rem; }
+
+.suggest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.suggest-item {
+  width: 100%; display: flex; gap: 10px; text-align: left; align-items: flex-start;
+  background: var(--accent-soft); color: var(--text); font-weight: 400; padding: 8px 10px;
+}
+
+@media (max-width: 900px) and (orientation: portrait), (max-width: 640px) {
+  .map-wrap { position: absolute; inset: 0; }
+}
